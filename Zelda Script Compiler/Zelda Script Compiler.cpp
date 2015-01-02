@@ -436,7 +436,7 @@ void do_pass(char str[][256], int pass, int total_lines) {
             }
 
 			label = strchr(str[line_num], '@');
-			if (label != NULL) {
+			while(label != NULL) {
 				memmove(label + strlen(labelprefix), label + 1, strlen(label) - 1);
 				strncpy(label, labelprefix, strlen(labelprefix));
 
@@ -446,6 +446,8 @@ void do_pass(char str[][256], int pass, int total_lines) {
 						label_end = label + strlen(label);
 					strcpy(label_end, " = $ - -_");
 				}
+
+				label = strchr(str[line_num], '@');
 			}
 
         } else if (pass == passLabel || pass == passAssemble) {
