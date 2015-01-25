@@ -415,24 +415,36 @@ void do_pass(char str[][256], int pass, int total_lines) {
                 //printf("parsing: %s\n", parsebuf);
                 ptr = get_word(ptr,parsebuf);
                 ptr = next_char(ptr);
-                ptr = next_char(ptr + 1);
-                //puts(ptr);
-                //result2 = parse_f(ptr);
-                //puts("what pointer currently has");
-                //puts(ptr);
-                strcpy(resultbuf,namebuf);
-                strcat(resultbuf,"_");
-                strcat(resultbuf,parsebuf);
+
+				strcpy(resultbuf,namebuf);
+				strcat(resultbuf,"_");
+				strcat(resultbuf,parsebuf);
 				strcat(resultbuf,"_abs");
-                strcpy(parsebuf,ptr);
-                //printf("Starting search cycle with %s\n",resultbuf);
-                //printf("Searching with %s...\n",resultbuf);
-				// printf(" SET_%s_ATTR8(%d,%s,%s)\n",namebuf,result,resultbuf,parsebuf);
 				strupr(namebuf);
-				if (strstr(strupr(resultbuf),"PTR") != NULL)
-					sprintf(str[line_num]," SET_%s_ATTR16(%s,%s,%s)\n",namebuf,indexbuf,resultbuf,parsebuf);                  
-				else
-					sprintf(str[line_num]," SET_%s_ATTR8(%s,%s,%s)\n",namebuf,indexbuf,resultbuf,parsebuf);
+
+				if (*ptr == '=') {
+					ptr = skip_whitespace(ptr + 1);
+
+					strcpy(parsebuf,ptr);
+
+					if (strstr(strupr(resultbuf),"PTR") != NULL)
+						sprintf(str[line_num]," SET_%s_ATTR16(%s,%s,%s)\n",namebuf,indexbuf,resultbuf,parsebuf);                  
+					else
+						sprintf(str[line_num]," SET_%s_ATTR8(%s,%s,%s)\n",namebuf,indexbuf,resultbuf,parsebuf);
+				} else if (ptr[0] == '@' && ptr[1] == '=') {
+					ptr = skip_whitespace(ptr + 2);
+
+					strcpy(parsebuf,ptr);
+					//modify(kPrev_object, HILL_EYEBLOCK_RIGHT_SLOT, object_anim_ptr, lo(eye_right_closed_gfx));
+					if (strstr(strupr(resultbuf),"PTR") != NULL) {
+						sprintf(str[line_num++]," MODIFY(%s,%s,lo(%s),kPrev_%s,)\n",indexbuf,resultbuf,parsebuf,namebuf);
+						sprintf(str[line_num]," MODIFY(%s,%s+1,hi(%s),kPrev_%s,)\n",indexbuf,resultbuf,parsebuf,namebuf);
+						total_lines++;
+					} else {
+						sprintf(str[line_num]," MODIFY(%s,%s,%s,kPrev_%s,)\n",indexbuf,resultbuf,parsebuf,namebuf);
+					}
+
+				}
             }
 
 			label = strchr(str[line_num], '@');
