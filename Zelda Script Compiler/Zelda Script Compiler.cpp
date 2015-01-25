@@ -198,12 +198,12 @@ int read_string_offset() {
 	return offset+len;
 }
 
-char* get_span(char* str, char* buffer, char limit) {
+char* get_span(char* str, char* buffer, char limit, char limit2) {
     int i;
     bool in_quote = false;
 	int paren_level = 0;
     for (i = 0; *str != 0; str++) {
-        if (*str == limit && !in_quote && paren_level == 0) {
+        if ((*str == limit || *str == limit2) && !in_quote && paren_level == 0) {
             if (i) break;
         } else {
 			if (*str == '"')
@@ -448,7 +448,7 @@ void do_pass(char str[][256], int pass, int total_lines) {
             }
 
 			label = strchr(str[line_num], '@');
-			if (label != NULL) {
+			while(label != NULL) {
 				memmove(label + strlen(labelprefix), label + 1, strlen(label) - 1);
 				strncpy(label, labelprefix, strlen(labelprefix));
 
@@ -458,6 +458,8 @@ void do_pass(char str[][256], int pass, int total_lines) {
 						label_end = label + strlen(label);
 					strcpy(label_end, " = $ - -_");
 				}
+
+				label = strchr(str[line_num], '@');
 			}
 
         } else if (pass == passLabel || pass == passAssemble) {
@@ -500,12 +502,12 @@ void do_pass(char str[][256], int pass, int total_lines) {
 							arg_replace(expandedarg, "*", "\\ .dw ", FALSE);
 							strcpy(transition, " ");
 						}
-                        for (ptr = get_span(ptr,resultbuf,','); ptr; ptr = get_span(ptr,resultbuf,',')) {
+                        for (ptr = get_span(ptr,resultbuf,',', '\\'); ptr; ptr = get_span(ptr,resultbuf,',', '\\')) {
 							if (ci == 9) ci = -1;
                             namebuf[3] = '1'+ci;
                             //puts(namebuf);
                             
-                            if (!*ptr) get_span(resultbuf,resultbuf,')');
+							if (!*ptr) get_span(resultbuf, resultbuf, ')', '\0');
 
 							char test_word[256];
 							get_word(resultbuf, test_word);
@@ -540,7 +542,7 @@ void do_pass(char str[][256], int pass, int total_lines) {
 						
                     }
 
-                    for (argptr = get_span(arg_structure[i],parsebuf,','); argptr; argptr = get_span(argptr,parsebuf,',')) {
+                    for (argptr = get_span(arg_structure[i],parsebuf,',', '\\'); argptr; argptr = get_span(argptr,parsebuf,',', '\\')) {
                         if (*parsebuf=='*') {
                             script_offset+=2;
                             if (pass == passAssemble) {
