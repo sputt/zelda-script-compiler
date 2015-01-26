@@ -387,7 +387,7 @@ static void shift_lines(int starting_index, char str[][256]) {
 	for (int i = total_lines; i > starting_index; i--) {
 		strcpy(str[i], str[i - 1]);
 	}
-	total_commands++;
+	total_lines++;
 }
 
 void do_pass(char str[][256], int pass, int total_lines) {
@@ -446,7 +446,6 @@ void do_pass(char str[][256], int pass, int total_lines) {
 						sprintf(str[line_num++]," MODIFY(%s,%s,lo(%s),kPrev_%s)\n",indexbuf,resultbuf,parsebuf,namebuf);
 						shift_lines(line_num, str);
 						sprintf(str[line_num]," MODIFY(%s,%s+1,hi(%s),kPrev_%s)\n",indexbuf,resultbuf,parsebuf,namebuf);
-						total_lines+=1;
 					} else {
 						sprintf(str[line_num]," MODIFY(%s,%s,%s,kPrev_%s,)\n",indexbuf,resultbuf,parsebuf,namebuf);
 					}
