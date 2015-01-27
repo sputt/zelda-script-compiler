@@ -22,7 +22,9 @@ int string_offset;
 int total_commands = 0;
 int total_lines = 0;
 char labelprefix[64];
-void do_pass(char str[][256], int pass, int total_lines);
+void do_pass(char str[][256], int pass);
+
+int param_replacement_index = 0;
 
 char *skip_whitespace(char *);
 
@@ -163,16 +165,17 @@ void read_commands() {
 		if (buffer[0] == ';') 
 			break;
 
-		if (buffer[0] == '\t') {
-			for (op_i = 0; buffer[op_i] != '\n' && buffer[op_i]; op_i++);
-			buffer[op_i] = 0;
+		if (isspace(buffer[0])) {
+			char *ptr = skip_whitespace(buffer);
+			for (op_i = 0; ptr[op_i] != '\n' && ptr[op_i]; op_i++);
+			ptr[op_i] = 0;
 
-            if (buffer[2] != ';') {
+            if (ptr[0] != ';') {
                 //handle command list
-				strcpy(commands[i], buffer + 5);
+				strcpy(commands[i], ptr + 4);
             } else {
                 //handle argument definitions
-                strcpy(arg_structure[i++], buffer + 3);
+                strcpy(arg_structure[i++], ptr + 1);
             }
         }
     }
@@ -328,8 +331,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	outfile = fopen(buffer, "w");
 
 	fprintf(outfile, "_: ;%s", argv[1]);
-	do_pass(source, passReplacement, total_lines);
-	do_pass(source, passAssemble, total_lines);
+	do_pass(source, passReplacement);
+	do_pass(source, passAssemble);
 
 	fclose(outfile);
 	return 0;
@@ -390,7 +393,18 @@ static void shift_lines(int starting_index, char str[][256]) {
 	total_lines++;
 }
 
-void do_pass(char str[][256], int pass, int total_lines) {
+
+static void replace_string( char *source, const char *search, const char *rep) {
+	char *loc = strstr(source, search);
+	if (loc != NULL) {
+		int lendiff = strlen(rep) - strlen(search);
+		memmove(loc + strlen(rep), loc + strlen(search), strlen(loc) - lendiff + 1);
+		strncpy(loc, rep, strlen(rep));
+	}
+}
+
+
+void do_pass(char str[][256], int pass) {
     int script_offset = 0,i;
     unsigned int result;
     char parsebuf[128],*ptr;
@@ -398,8 +412,15 @@ void do_pass(char str[][256], int pass, int total_lines) {
 
     line_num = 0;
     
+	char *replacementpoints[16];
+	int replacementoffsets[16];
+	int replacements_seen = 0;
+	int replacement_follows = 0;
+
     for (; line_num < total_lines; line_num++) {
 		//printf("Scriptoffset: %d - %s\n", script_offset, str[line_num]);
+
+
         if (pass == passReplacement) {
 			int in_string = 0;
 			char *label;
@@ -468,6 +489,35 @@ void do_pass(char str[][256], int pass, int total_lines) {
 				label = strchr(str[line_num], '@');
 			}
 
+			int var_index = 0;
+			char *var = strchr(str[line_num], '{');
+			while(var != NULL) {
+				int idx = var - str[line_num];
+				int n = strchr(var, '}') - var + 1;
+				char varname[64] = {0};
+				strncpy(varname, var + 1, n - 2);
+				varname[n] = 0;
+
+				char newname[64];
+				sprintf(newname, "{%d}", param_replacement_index);
+				param_replacement_index++;
+
+				char rawname[64];
+				strncpy(rawname, var, n);
+				rawname[n] = 0;
+
+				char regname[64];
+				sprintf(regname, "REG_%s", varname);
+
+				shift_lines(line_num, str);
+				sprintf(str[line_num++], " PARAMETERIZE(%s, %s)", regname, newname);
+				var_index++;
+
+				replace_string(str[line_num], rawname, newname);
+
+				var = strchr(str[line_num] + idx + n + 2, '{');
+			}
+
         } else if (pass == passLabel || pass == passAssemble) {
         	
 			fputc('\n', outfile);
@@ -486,29 +536,34 @@ void do_pass(char str[][256], int pass, int total_lines) {
 					char transition[16] = ", ";
                     
                     script_offset++; //add one for the "opcode"
-                    
-                    if (pass == passAssemble)
-						fprintf(outfile, ".db $%02x", i);
-                    
+
+					bool doParameterizeReplacement = false;
+					if (stricmp(commands[i], "PARAMETERIZE") == 0) {
+						doParameterizeReplacement = true;
+					}
+                                        
                     ptr = next_char(ptr);
                     if (ptr && *ptr == '(') ptr++;
-                    else {
-                        //if (pass == passAssemble) script[scr_i++] = i;
-                        continue;
-                        // it's a singler.
-                        // output the byte.
-                    }
+					else {
+						fprintf(outfile, ".db $%02x", i);
+						continue;
+					}
+
                     /* parse values of arguments */
                     if (pass == passAssemble) {
                         strcpy(namebuf,"argX");
                         ci = 0;
+
+						int offset = 0;
 						strcpy(expandedarg, arg_structure[i]);
 						arg_replace(expandedarg, ",*", "\\ .dw ", FALSE);
 						if (expandedarg[0] == '*') {
 							arg_replace(expandedarg, "*", "\\ .dw ", FALSE);
 							strcpy(transition, " ");
 						}
-                        for (ptr = get_span(ptr,resultbuf,',', '\\'); ptr; ptr = get_span(ptr,resultbuf,',', '\\')) {
+
+						char *oldptr = get_span(ptr,resultbuf,',', '\\');
+                        for (ptr = oldptr; ptr; ptr = get_span(ptr,resultbuf,',', '\\')) {
 							if (ci == 9) ci = -1;
                             namebuf[3] = '1'+ci;
                             //puts(namebuf);
@@ -518,7 +573,8 @@ void do_pass(char str[][256], int pass, int total_lines) {
 							char test_word[256];
 							get_word(resultbuf, test_word);
                             if (strcmp(test_word,"*") != 0) {
-								if (*(skip_whitespace(resultbuf)) == '"') {
+								char *expr = skip_whitespace(resultbuf);
+								if (*expr == '"') {
 									int old_offset = string_offset;
 									//string situations
 									add_string(skip_whitespace(resultbuf));
@@ -529,6 +585,21 @@ void do_pass(char str[][256], int pass, int total_lines) {
 									strcat(buf, numbuf);
 									set_define(add_define(namebuf, NULL), _strdup(buf), -1, false);
 									arg_replace(expandedarg, namebuf, buf, TRUE);
+								} else if (*expr == '{') {
+									if (doParameterizeReplacement) {
+										replacementpoints[replacements_seen++] = str[line_num];
+									} else {
+										int n;
+										sscanf(expr, "{%d}", &n);
+										replacementoffsets[replacement_follows++] = ci;
+
+										char val[64];
+										sprintf(val, "{%d}", n);
+
+										set_define(add_define(namebuf, NULL), _strdup(resultbuf), -1, false);
+										//printf("%s assigned to: %s\n",namebuf,resultbuf);
+										arg_replace(expandedarg, namebuf, "-1", TRUE);
+									}
 								} else {
 									set_define(add_define(namebuf, NULL), _strdup(resultbuf), -1, false);
 									//printf("%s assigned to: %s\n",namebuf,resultbuf);
@@ -543,35 +614,65 @@ void do_pass(char str[][256], int pass, int total_lines) {
                             }
                             //puts(ptr);
                             
-                            ci++;               
+                            ci++;
+							oldptr = ptr;
+							offset++;
                         }
-						
                     }
 
-                    for (argptr = get_span(arg_structure[i],parsebuf,',', '\\'); argptr; argptr = get_span(argptr,parsebuf,',', '\\')) {
-                        if (*parsebuf=='*') {
-                            script_offset+=2;
-                            if (pass == passAssemble) {
-                                ci = parse_f(skip_whitespace(parsebuf)+1);
-                                script[scr_i++] = ci & 0xFF;
-                                script[scr_i++] = ci >> 8;
-                            }
-                        } else {
-                            script_offset++;
-                            if (pass == passAssemble) {
-								script[scr_i++] = parse_f(parsebuf) & 0xFF;
-                            }
-                        }
-                        argcount++;
-                    }
+					if (!doParameterizeReplacement) {
+						int curr_arg = 0;
+						int curr_offset = 0;
+						for (argptr = get_span(arg_structure[i],parsebuf,',', '\\'); argptr; argptr = get_span(argptr,parsebuf,',', '\\')) {
 
-					if (pass == passAssemble) {
-						char stroffset[256];
-						sprintf(stroffset, "%d", script_offset);
-						arg_replace(expandedarg, "@&next", stroffset, TRUE);
-						fprintf(outfile, "%s%s", transition, expandedarg);
-					}
-                        
+							if (replacements_seen > 0) {
+								for (int i = 0; i < replacements_seen; i++) {
+									if (replacementoffsets[i] == curr_arg) {
+
+										int j;
+										for (j = 0; j < total_commands && stricmp("parameterize",commands[j]); j++);
+
+										char *reg = strstr(replacementpoints[i], "REG_");
+										
+										char buffer[256];
+										get_word(reg, buffer);
+
+										fprintf(outfile, ".db $%02x, %s, %d\n", j, buffer, curr_offset + 1);
+									}
+								}
+							}
+
+							if (*parsebuf=='*') {
+								script_offset+=2;
+								curr_offset+=2;
+								if (pass == passAssemble) {
+									ci = parse_f(skip_whitespace(parsebuf)+1);
+									script[scr_i++] = ci & 0xFF;
+									script[scr_i++] = ci >> 8;
+								}
+							} else {
+								curr_offset++;
+								script_offset++;
+								if (pass == passAssemble) {
+									script[scr_i++] = parse_f(parsebuf) & 0xFF;
+								}
+							}
+							argcount++;
+							curr_arg++;
+						}
+
+						if (pass == passAssemble) {
+							fprintf(outfile, ".db $%02x", i);
+
+							char stroffset[256];
+							sprintf(stroffset, "%d", script_offset);
+							arg_replace(expandedarg, "@&next", stroffset, TRUE);
+							fprintf(outfile, "%s%s", transition, expandedarg);
+						}
+
+						replacements_seen = 0;
+						replacement_follows = 0;
+					} 
                 } else {
                     fprintf(stderr, "Invalid command %s\n.", str[line_num]);
                     return;
