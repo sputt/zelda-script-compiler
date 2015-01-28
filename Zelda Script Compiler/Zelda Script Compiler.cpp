@@ -477,7 +477,9 @@ void do_pass(char str[][256], int pass) {
 			label = strchr(str[line_num], '@');
 			while(label != NULL) {
 				memmove(label + strlen(labelprefix), label + 1, strlen(label) - 1);
+				int len = strlen(label) - 1;
 				strncpy(label, labelprefix, strlen(labelprefix));
+				label[strlen(labelprefix) + len] = 0;
 
 				if (label == str[line_num]) {
 					char *label_end = strchr(label, ':');
@@ -515,7 +517,7 @@ void do_pass(char str[][256], int pass) {
 
 				replace_string(str[line_num], rawname, newname);
 
-				var = strchr(str[line_num] + idx + n + 2, '{');
+				var = strchr(str[line_num] + idx + strlen(newname), '{');
 			}
 
         } else if (pass == passLabel || pass == passAssemble) {
@@ -535,8 +537,6 @@ void do_pass(char str[][256], int pass) {
 					char expandedarg[256];
 					char transition[16] = ", ";
                     
-                    script_offset++; //add one for the "opcode"
-
 					bool doParameterizeReplacement = false;
 					if (stricmp(commands[i], "PARAMETERIZE") == 0) {
 						doParameterizeReplacement = true;
@@ -638,6 +638,7 @@ void do_pass(char str[][256], int pass) {
 										get_word(reg, buffer);
 
 										fprintf(outfile, ".db $%02x, %s, %d\n", j, buffer, curr_offset + 1);
+										script_offset += 3;
 									}
 								}
 							}
@@ -663,6 +664,7 @@ void do_pass(char str[][256], int pass) {
 
 						if (pass == passAssemble) {
 							fprintf(outfile, ".db $%02x", i);
+							script_offset++;
 
 							char stroffset[256];
 							sprintf(stroffset, "%d", script_offset);
