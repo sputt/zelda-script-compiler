@@ -546,6 +546,7 @@ void do_pass(char str[][256], int pass) {
                     if (ptr && *ptr == '(') ptr++;
 					else {
 						fprintf(outfile, ".db $%02x", i);
+						script_offset++;
 						continue;
 					}
 
