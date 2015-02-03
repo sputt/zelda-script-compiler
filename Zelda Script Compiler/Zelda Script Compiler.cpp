@@ -464,9 +464,7 @@ void do_pass(char str[][256], int pass) {
 					strcpy(parsebuf,ptr);
 					//modify(kPrev_object, HILL_EYEBLOCK_RIGHT_SLOT, object_anim_ptr, lo(eye_right_closed_gfx));
 					if (strstr(strupr(resultbuf),"PTR") != NULL) {
-						sprintf(str[line_num++]," MODIFY(%s,%s,lo(%s),kPrev_%s)\n",indexbuf,resultbuf,parsebuf,namebuf);
-						shift_lines(line_num, str);
-						sprintf(str[line_num]," MODIFY(%s,%s+1,hi(%s),kPrev_%s)\n",indexbuf,resultbuf,parsebuf,namebuf);
+						sprintf(str[line_num], " MODIFY16(%s,%s,%s,kPrev_%s,)\n", indexbuf, resultbuf, parsebuf, namebuf);
 					} else {
 						sprintf(str[line_num]," MODIFY(%s,%s,%s,kPrev_%s,)\n",indexbuf,resultbuf,parsebuf,namebuf);
 					}
